@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Net;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Globalization;
 
 namespace Televideo
 {
@@ -305,11 +306,18 @@ namespace Televideo
                         continue;
                     siteContent = siteContent.Substring(startIndex);
                     int endIndex = siteContent.IndexOf("</li></ul>");
-                    siteContent = siteContent.Substring(0, endIndex);
+                    siteContent = siteContent.Substring(0, endIndex + 5);
                     Regex rx = new Regex("(?<=<li>)(.*?)(?=</li>)", RegexOptions.IgnoreCase);
                     MatchCollection matches = rx.Matches(siteContent);
+                    string lastTimeString = matches[matches.Count - 1].Value.Substring(0, 5);
+                    string firstTimeString = matches[0].Value.Substring(0, 5);
+                    DateTime lastTime = DateTime.ParseExact(lastTimeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
+                    DateTime firstTime = DateTime.ParseExact(firstTimeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
+                    int elementsCount = matches.Count;
+                    if (firstTime.Equals(lastTime))
+                        elementsCount -= 1;
 
-                    for (int ctr = 0; ctr < matches.Count; ctr++)
+                    for (int ctr = 0; ctr < elementsCount; ctr++)
                     {
                         for (int k = 0; k < programs.Length; k++)
                         {
@@ -327,7 +335,13 @@ namespace Televideo
                                 found.Margin = margin;
                                 container.Children.Add(found);
                                 TextBlock found2 = new TextBlock();
-                                found2.Text = dayString + " " + channels[j].name + " " + matches[ctr].Value;
+                                string timeString = matches[ctr].Value.Substring(0, 5);
+                                DateTime time = DateTime.ParseExact(timeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
+                                if (time.CompareTo(DateTime.ParseExact("00:00:00", "HH:mm:ss", CultureInfo.InvariantCulture)) >= 0
+                                    && time.CompareTo(DateTime.ParseExact("06:00:00", "HH:mm:ss", CultureInfo.InvariantCulture)) < 0)
+                                    found2.Text = DateTime.ParseExact(dayString, "dd-MM-yyyy", CultureInfo.InvariantCulture).AddDays(1).ToString("dd-MM-yyyy") + " " + channels[j].name + " " + matches[ctr].Value;
+                                else
+                                    found2.Text = dayString + " " + channels[j].name + " " + matches[ctr].Value;
                                 found2.Height = 30;
                                 found2.FontSize = 20;
                                 found2.HorizontalAlignment = HorizontalAlignment.Left;
