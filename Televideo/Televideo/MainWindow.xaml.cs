@@ -310,9 +310,8 @@ namespace Televideo
                     Regex rx = new Regex("(?<=<li>)(.*?)(?=</li>)", RegexOptions.IgnoreCase);
                     MatchCollection matches = rx.Matches(siteContent);
                     string lastTimeString = matches[matches.Count - 1].Value.Substring(0, 5);
-                    string firstTimeString = matches[0].Value.Substring(0, 5);
                     DateTime lastTime = DateTime.ParseExact(lastTimeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
-                    DateTime firstTime = DateTime.ParseExact(firstTimeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
+                    DateTime firstTime = DateTime.ParseExact("06:00:00", "HH:mm:ss", CultureInfo.InvariantCulture);
                     int elementsCount = matches.Count;
                     if (firstTime.Equals(lastTime))
                         elementsCount -= 1;
