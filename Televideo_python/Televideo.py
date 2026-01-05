@@ -2,11 +2,10 @@ import os
 import tkinter as tk
 from datetime import date, timedelta, datetime
 from tkinter import Scrollbar
-import requests
 import re
-import json
 import aiohttp
 import asyncio
+import inspect
 
 index = 0
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -66,8 +65,7 @@ def add_text_block(text, tag):
     global index, factor, offset, canvas
     title = tk.Label(canvas, text = text, fg = "black", bg = "white", font = ("Helvetica", 20))
     title.tag = tag
-    canvas.create_window(0 + offset + (canvas.winfo_width()), index * factor + offset, window = title, anchor = "center")
-    #title.grid(row = index, column = 0, sticky = "EW")
+    canvas.create_window(0 + 2 * offset, index * factor + offset, window = title, anchor = "center")
     index += 1
 
 def textBox_LostFocus(text, tag):
@@ -90,12 +88,13 @@ def textBox_LostFocus(text, tag):
 def addButton_Click(tag):
     global index, canvas
     for widget in canvas.winfo_children():
-        if hasattr(widget, "tag") and getattr(widget, "tag") == tag:
+        if hasattr(widget, "tag") and getattr(widget, "tag") >= tag:
             widget.destroy()
+            if widget.widgetName == 'label':
+                index -= 1
+    index -= 1
     add_program_in_panel("", index)
-    index += 1
     add_search_button(index)
-    index += 1
 
 def removeButton_Click(event, tag):
     global index, canvas
@@ -111,9 +110,6 @@ def removeButton_Click(event, tag):
             newLines = righe.copy()
     with open(os.path.join(__location__, 'programs.txt'), 'w', encoding = "utf-8") as file:
         file.writelines([line + '\n' for line in newLines])
-    for widget in canvas.winfo_children():
-        if hasattr(widget, "tag"):
-            widget.destroy()
     insert_programs_to_search()
     
 def add_program_in_panel(line, tag):
@@ -126,6 +122,10 @@ def add_program_in_panel(line, tag):
     b.tag = tag
     canvas.create_window(0 + 5 * offset, index * factor + offset, window = b, anchor = "w")
     index += 1
+    if inspect.stack()[1].function == "addButton_Click":
+        with open(os.path.join(__location__, 'programs.txt'), "a", encoding="utf-8") as f:
+            f.writelines("\n")
+
 
 def load_programs_to_search():
     global programs
@@ -185,6 +185,7 @@ def find_programs():
                     if (stringa1.find(stringa2) >= 0):
                         found = tk.Label(canvas, text = programs[k], fg = "black", bg = "cyan", font = ("Helvetica", 20))
                         canvas.create_window(0 + offset, index * factor + offset, window = found, anchor = "center")
+                        found.tag = index
                         index += 1
                         time_string = (matches[ctr])[0:5]
                         time = datetime.strptime(time_string + ":00", "%H:%M:%S")
@@ -194,19 +195,22 @@ def find_programs():
                             text2 = day_string + " " + channels[j]["name"] + " " + matches[ctr]
                         found2 = tk.Label(canvas, text = text2, fg = "black", bg = "white", font = ("Helvetica", 20))
                         canvas.create_window(0 + offset, index * factor + offset, window = found2, anchor = "center")
+                        found2.tag = index
                         index += 1
     end = tk.Label(canvas, text = "Ricerca completata", fg = "green", bg = "white", font = ("Helvetica", 24))
     canvas.create_window(0 + offset, index * factor + offset, window = end, anchor = "center")
+    end.tag = index
     index += 1
 
 def searchButton_Click(event, tag):
-    global canvas
+    global canvas, index
     load_programs_to_search()
     if not programs:
         return
     for widget in canvas.winfo_children():
         if hasattr(widget, "tag") and getattr(widget, "tag") > tag:
             widget.destroy()
+            index -= 1
     find_programs()
     update_canvas_region()
     window.geometry(str(canvas.winfo_width()) + "x800")
@@ -230,14 +234,18 @@ def add_rows():
         canvas.create_window(0 + offset, (index + i) * factor + offset, window = label_vuoto, anchor = "center")
 
 def insert_programs_to_search():
-    global canvas
+    global canvas, index
+    for widget in canvas.winfo_children():
+        widget.destroy()
     i = 0
+    index = 0
     add_text_block("Programmi da cercare", i)
     i += 1
     with open(os.path.join(__location__, 'programs.txt'), 'r', encoding = "utf-8") as file:
         for line in file:
             add_program_in_panel(line.rstrip('\n'), i)
             i += 1
+    index = i
     add_search_button(i)
     add_rows()
     update_canvas_region()
