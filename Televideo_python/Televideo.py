@@ -5,6 +5,8 @@ from tkinter import Scrollbar
 import requests
 import re
 import json
+import aiohttp
+import asyncio
 
 index = 0
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -14,10 +16,10 @@ window = tk.Tk()
 window.geometry("550x600")
 window.title("Televideo")
 window.resizable(True, True)
-#window.attributes('-fullscreen', True)
 window.configure(background = "white")
 factor = 50
 offset = 50
+metadati = []
 
 def update_canvas_region():
     global canvas
@@ -29,29 +31,33 @@ def show_error_message(text):
     global index, factor, offset, canvas
     warning = tk.Label(canvas, text = text, fg = "red", bg = "white", font = ("Helvetica", 24))
     canvas.create_window(0 + offset, index * factor + offset, window = warning, anchor = "center")
-    #warning.grid(row = index, column = 0, sticky = "WE")
     index += 1
     update_canvas_region()
 
-def get_web_page(url):
-    getUrl = requests.get(url)
-    if (getUrl.status_code != 200):
-        show_error_message("Impossibile connettersi a " + url)
-        return ""
-    return json.dumps(getUrl.text)
+# def get_web_page(url):
+#     getUrl = requests.get(url)
+#     if (getUrl.status_code != 200):
+#         show_error_message("Impossibile connettersi a " + url)
+#         return ""
+#     return json.dumps(getUrl.text)
 
-def find_channels():
+async def get_web_page(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                return ""
+            return await resp.text()
+
+async def find_channels():
     global channels
     sURL = "https://guidatv.quotidiano.net/"
-    siteContent = get_web_page(sURL)
-    #siteContent = "data-srcset="https://immagini.quotidiano.net/?url=https%3A%2F%2Fs3.eu-west-1.amazonaws.com%2Fstatic.guidatv.quotidiano.net%2Fimg%2Floghi_tv%2Fsky_cinema_action.png&w=100&h=100&fmt=webp&mode=fill&bg=ffffff" type="image/webp" />\n        <source data-srcset="https://immagini.quotidiano.net/?url=https%3A%2F%2Fs3.eu-west-1.amazonaws.com%2Fstatic.guidatv.quotidiano.net%2Fimg%2Floghi_tv%2Fsky_cinema_action.png&w=100&h=100&mode=fill&bg=ffffff" />\n        <img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" data-src="https://immagini.quotidiano.net/?url=https%3A%2F%2Fs3.eu-west-1.amazonaws.com%2Fstatic.guidatv.quotidiano.net%2Fimg%2Floghi_tv%2Fsky_cinema_action.png&w=100&h=100&mode=fill&bg=ffffff" class="lazyload"  title="Sky Cinema Action" alt="Sky Cinema Action" width="100" height="100" />\n    </picture>\n    \n      \n      <span class="channel-name">Sky Cinema Action</span>\n      \n    </a>\n  </header>\n  \n</section>\n\n    \n\n    \n<section class="channel channel-thumbnail">\n  <header class="channel-header">\n    <a href="/sky_cinema_collection/"\n       title="Programmi Sky Cinema Collection">\n      \n        \n    <picture>\n        <source data-srcset="https://immagini.quotidiano.net/?url=https%3A%2F%2Fs3.eu-west-1.amazonaws.com%2Fstatic.guidatv.quotidiano.net%2Fimg%2Floghi_tv%2Fsky_cinema_collection.png&w=100&h=100&fmt=webp&mode=fill&bg=ffffff" type="image/webp" />\n        <source data-srcset="https://immagini.quotidiano.net/?url=https%3A%2F%2Fs3.eu-west-1.amazonaws.com%2Fstatic.guidatv.quotidiano.net%2Fimg%2Floghi_tv%2Fsky_cinema_collection.png&w=100&h=100&mode=fill&bg=ffffff" />\n        <img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" data-src="https://immagini.quotidiano.net/?url=https%3A%2F%2Fs3.eu-west-1.amazonaws.com%2Fstatic.guidatv.quotidiano.net%2Fimg%2Floghi_tv%2Fsky_cinema_collection.png&w=100&h=100&mode=fill&bg=ffffff" class="lazyload""
-    #print(siteContent)
-    pattern = r'(?<=channel channel-thumbnail)(.*?)(?=title)'
-    matches = re.findall(pattern, siteContent, flags = re.IGNORECASE)
-    pattern2 = r'(?<=\"channel-name\\">)(.*?)(?=</span>)'
+    siteContent = await get_web_page(sURL)
+    pattern = r'<section class="channel channel-thumbnail">(.*?)</section>'
+    matches = re.findall(pattern, siteContent, flags = re.IGNORECASE | re.DOTALL)
+    pattern2 = r'(?<=class="channel-name">)(.*?)(?=</span>)'
     matches2 = re.findall(pattern2, siteContent, flags = re.IGNORECASE)
     for i, s in enumerate(matches):
-        pattern = r'(?<=a href=\\"/)(.*?)(?=\\")'
+        pattern = r'(?<=a href="/)(.*?)(?=")'
         match = re.findall(pattern, s, flags = re.IGNORECASE)
         canale = {"url": sURL + match[0], "name": matches2[i]}
         channels.append(canale)
@@ -116,11 +122,9 @@ def add_program_in_panel(line, tag):
     tb.bind("<FocusOut>", lambda event: textBox_LostFocus(tb.get(), tag))
     tb.tag = tag
     canvas.create_window(0 + 5 * offset, index * factor + offset, window = tb, anchor = "e")
-    #tb.grid(row = index, column = 0, sticky = "WE")
     b = tk.Button(canvas, text = "Rimuovi", command = lambda e = None, tag = tag: removeButton_Click(e, tag))
     b.tag = tag
     canvas.create_window(0 + 5 * offset, index * factor + offset, window = b, anchor = "w")
-    #b.grid(row = index, column = 1, sticky = "WE")
     index += 1
 
 def load_programs_to_search():
@@ -131,18 +135,36 @@ def load_programs_to_search():
             programs.append(riga.rstrip('\n'))
     return programs
 
-def find_programs():
-    global index, offset, factor, canvas
-    global programs
+async def fetch_all_pages(channels):
+    global metadati
     today = date.today()
+    tasks = []
+
     for j, canale_x in enumerate(channels):
         for d in range(7):
-            day = today + timedelta(days = d)
+            day = today + timedelta(days=d)
             day_string = day.strftime("%d-%m-%Y")
-            site_content = get_web_page(channels[j]["url"] + day_string)
+            url = channels[j]["url"] + day_string
+            tasks.append(get_web_page(url))
+            metadati.append((j, day_string))
+
+    return await asyncio.gather(*tasks)
+
+def find_programs():
+    global index, offset, factor, canvas, metadati
+    global programs
+    metadati.clear()
+    i = 0
+    results = asyncio.run(fetch_all_pages(channels))
+    for j, canale_x in enumerate(channels):
+        for d in range(7):
+            site_content = results[i]
+            day_string = metadati[i][1]
+            j = metadati[i][0]
+            i += 1
             if(site_content == ""):
                 return
-            start_index = site_content.find('<section id=\\"faqs\\">')
+            start_index = site_content.find('<section id=\"faqs\">')
             if (start_index < 0):
                 continue
             site_content = site_content[start_index:]
@@ -163,7 +185,6 @@ def find_programs():
                     if (stringa1.find(stringa2) >= 0):
                         found = tk.Label(canvas, text = programs[k], fg = "black", bg = "cyan", font = ("Helvetica", 20))
                         canvas.create_window(0 + offset, index * factor + offset, window = found, anchor = "center")
-                        #found.grid(row = index, column = 0, sticky = "W")
                         index += 1
                         time_string = (matches[ctr])[0:5]
                         time = datetime.strptime(time_string + ":00", "%H:%M:%S")
@@ -173,11 +194,9 @@ def find_programs():
                             text2 = day_string + " " + channels[j]["name"] + " " + matches[ctr]
                         found2 = tk.Label(canvas, text = text2, fg = "black", bg = "white", font = ("Helvetica", 20))
                         canvas.create_window(0 + offset, index * factor + offset, window = found2, anchor = "center")
-                        #found2.grid(row = index, column = 0, sticky = "NSWE")
                         index += 1
     end = tk.Label(canvas, text = "Ricerca completata", fg = "green", bg = "white", font = ("Helvetica", 24))
     canvas.create_window(0 + offset, index * factor + offset, window = end, anchor = "center")
-    #end.grid(row = index, column = 0, sticky = "WE")
     index += 1
 
 def searchButton_Click(event, tag):
@@ -197,11 +216,9 @@ def add_search_button(tag):
     addButton = tk.Button(canvas, text = "Aggiungi programma", command = lambda e = None, tag= tag: addButton_Click(tag))
     addButton.tag = tag
     canvas.create_window(0 + offset, index * factor + offset, window = addButton, anchor = "e")
-    #addButton.grid(row = index, column = 0, sticky = "W")
     searchButton = tk.Button(canvas, text = "Cerca programmi", command = lambda e = None, tag = tag: searchButton_Click(e, tag))
     searchButton.tag = tag
     canvas.create_window(0 + offset, index * factor + offset, window = searchButton, anchor = "w")
-    #searchButton.grid(row = index, column = 0, sticky = "E")
     index += 1
     canvas.update_idletasks()
     canvas.config(scrollregion = canvas.bbox("all"))
@@ -211,7 +228,6 @@ def add_rows():
     for i in range(15):
         label_vuoto = tk.Label(canvas, text="", bg = "white")
         canvas.create_window(0 + offset, (index + i) * factor + offset, window = label_vuoto, anchor = "center")
-        #label_vuoto.grid(row = index + i, column = 0, sticky = "WE")
 
 def insert_programs_to_search():
     global canvas
@@ -228,10 +244,7 @@ def insert_programs_to_search():
 
 window.grid_rowconfigure(0, weight = 1)
 window.grid_columnconfigure(0, weight = 1)
-#w, h = window.winfo_screenwidth(), window.winfo_screenheight()
-canvas = tk.Canvas(window, bg = "white")#, scrollregion = (0, 0, 1000, 1000)) # f"0 0 {w * 2} {h * 2}")
-#canvas.update_idletasks()
-#canvas.config(scrollregion = canvas.bbox("all"))
+canvas = tk.Canvas(window, bg = "white")
 canvas.grid(row = 0, column = 0, sticky = 'nswe')
 wh = Scrollbar(window, orient = 'horizontal', command = canvas.xview)
 wh.grid(row = 6, column = 0, sticky = 'ew')
@@ -243,7 +256,7 @@ canvas.bind_all("<Shift-MouseWheel>", lambda event: canvas.xview_scroll(int(-1 *
 
 channels = []
 
-find_channels()
+asyncio.run(find_channels())
 insert_programs_to_search()
 
 if __name__ == "__main__":
