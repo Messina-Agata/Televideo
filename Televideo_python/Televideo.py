@@ -33,13 +33,6 @@ def show_error_message(text):
     index += 1
     update_canvas_region()
 
-# def get_web_page(url):
-#     getUrl = requests.get(url)
-#     if (getUrl.status_code != 200):
-#         show_error_message("Impossibile connettersi a " + url)
-#         return ""
-#     return json.dumps(getUrl.text)
-
 async def get_web_page(url):
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
