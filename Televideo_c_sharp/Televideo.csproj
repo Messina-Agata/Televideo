@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ApplicationIcon>conf/televideo_PgT_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="conf/programs.txt">
