@@ -6,6 +6,13 @@ import re
 import aiohttp
 import asyncio
 import inspect
+from dataclasses import dataclass
+
+@dataclass
+class Program:
+    title: str
+    time: str
+
 
 index = 0
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -44,14 +51,23 @@ async def find_channels():
     global channels
     sURL = "https://guidatv.quotidiano.net/"
     siteContent = await get_web_page(sURL)
-    pattern = r'<section class="channel channel-thumbnail">(.*?)</section>'
-    matches = re.findall(pattern, siteContent, flags = re.IGNORECASE | re.DOTALL)
-    pattern2 = r'(?<=class="channel-name">)(.*?)(?=</span>)'
-    matches2 = re.findall(pattern2, siteContent, flags = re.IGNORECASE)
-    for i, s in enumerate(matches):
-        pattern = r'(?<=a href="/)(.*?)(?=")'
-        match = re.findall(pattern, s, flags = re.IGNORECASE)
-        canale = {"url": sURL + match[0], "name": matches2[i]}
+
+    rx = r'"Canali Televisivi Principali", "itemListElement": \[\{(.*?)\}\], "numberOfItems"'
+    match = re.search(rx, siteContent, re.DOTALL)
+    inner_content = match.group(1) if match else ""
+
+    rx1 = r'"url": "([^"]*)"'
+    matches1 = re.findall(rx1, inner_content, re.IGNORECASE)
+
+    rx2 = r'"name": "([^"]*)"'
+    matches2 = re.findall(rx2, inner_content, re.IGNORECASE)
+
+    if not matches1 or not matches2:
+        show_error_message("Errore nell'estrazione dei canali")
+        return 
+
+    for i, s in enumerate(matches1):
+        canale = {"url": matches1[i], "name": matches2[i]}
         channels.append(canale)
 
 def add_text_block(text, tag):
@@ -157,35 +173,47 @@ def find_programs():
             i += 1
             if(site_content == ""):
                 return
-            start_index = site_content.find('<section id=\"faqs\">')
-            if (start_index < 0):
+
+            regex = r'<a class="program"(.*?)<div class="program-image-wrapper">'
+            content_list = re.findall(regex, site_content, re.DOTALL)
+
+            if not content_list:
                 continue
-            site_content = site_content[start_index:]
-            end_index = site_content.find("</li></ul>")
-            site_content = site_content[0:end_index + 5]
-            rx = r'(?<=<li>)(.*?)(?=</li>)'
-            matches = re.findall(rx, site_content, flags = re.IGNORECASE)
-            last_time_string = (matches[len(matches) - 1])[0:5]
+
+            rx_title = r'title="([^"]*)"'
+            rx_time = r'<div class="hour">([^<]*)</div>'
+
+            channel_programs = []
+            for content in content_list:
+                match_title = re.search(rx_title, content)
+                match_time = re.search(rx_time, content)
+                
+                title = match_title.group(1) if match_title else ""
+                time = match_time.group(1) if match_time else ""
+                
+                channel_programs.append(Program(title=title, time=time))
+
+            last_time_string = channel_programs[-1].time
             last_time = datetime.strptime(last_time_string + ":00", "%H:%M:%S")
             first_time = datetime.strptime("06:00:00", "%H:%M:%S")
-            elements_count = len(matches)
+            elements_count = len(channel_programs)
             if (first_time == last_time):
                 elements_count -= 1
             for ctr in range(elements_count):
                 for k in range(len(programs)):
-                    stringa1 = matches[ctr].lower()
+                    stringa1 = channel_programs[ctr].title.lower()
                     stringa2 = programs[k].lower()
                     if (stringa1.find(stringa2) >= 0):
                         found = tk.Label(canvas, text = programs[k], fg = "black", bg = "cyan", font = ("Helvetica", 20))
                         canvas.create_window(0 + offset, index * factor + offset, window = found, anchor = "center")
                         found.tag = index
                         index += 1
-                        time_string = (matches[ctr])[0:5]
+                        time_string = channel_programs[ctr].time
                         time = datetime.strptime(time_string + ":00", "%H:%M:%S")
                         if ((time >= datetime.strptime("00:00:00", "%H:%M:%S")) and (time < datetime.strptime("06:00:00", "%H:%M:%S"))):
-                            text2 = (datetime.strptime(day_string, "%d-%m-%Y") + timedelta(days = 1)).strftime("%d-%m-%Y") + " " + channels[j]["name"] + " " + matches[ctr]
+                            text2 = (datetime.strptime(day_string, "%d-%m-%Y") + timedelta(days = 1)).strftime("%d-%m-%Y") + " " + channels[j]["name"] + " " + channel_programs[ctr].time + " | " + channel_programs[ctr].title
                         else:
-                            text2 = day_string + " " + channels[j]["name"] + " " + matches[ctr]
+                            text2 = day_string + " " + channels[j]["name"] + " " + channel_programs[ctr].time + " | " + channel_programs[ctr].title
                         found2 = tk.Label(canvas, text = text2, fg = "black", bg = "white", font = ("Helvetica", 20))
                         canvas.create_window(0 + offset, index * factor + offset, window = found2, anchor = "center")
                         found2.tag = index

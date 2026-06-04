@@ -23,6 +23,8 @@ public partial class MainWindow : Window
         public string url;
     };
     private channel[] channels;
+    public record Program(string title, string time);
+
     public MainWindow()
     {
         try
@@ -47,17 +49,34 @@ public partial class MainWindow : Window
         string siteContent = await GetWebPage(sURL);
         if (string.IsNullOrEmpty(siteContent))
             return;
-        Regex rx = new Regex("<section class=\"channel channel-thumbnail\".*?</section>", RegexOptions.Singleline);
-        MatchCollection matches = rx.Matches(siteContent);
-        Regex rx2 = new Regex("(?<=class=\"channel-name\">)(.*?)(?=</span>)", RegexOptions.IgnoreCase);
-        MatchCollection matches2 = rx2.Matches(siteContent);
-        channels = new channel[matches.Count];
-        for (int ctr = 0; ctr < matches.Count; ctr++)
+        Regex rx = new Regex(@"""Canali Televisivi Principali"", ""itemListElement"": \[\{(.*?)\}\], ""numberOfItems""", RegexOptions.Singleline);
+        Match match = rx.Match(siteContent);
+        string innerContent = match.Success ? match.Groups[1].Value : "";
+        Regex rx1 = new Regex(@"""url"": ""([^""]*)""", RegexOptions.IgnoreCase);
+        // .Select(m => m.Groups[1].Value) estrae solo il testo catturato dalle parentesi tonde
+        List<string> matches1 = rx1.Matches(innerContent)
+                            .Cast<Match>()
+                            .Select(m => m.Groups[1].Value)
+                            .ToList();
+
+        Regex rx2 = new Regex(@"""name"": ""([^""]*)""", RegexOptions.IgnoreCase);
+        // Stessa logica per estrarre solo i nomi puliti senza "name": ""
+        List<string> matches2 = rx2.Matches(innerContent)
+                            .Cast<Match>()
+                            .Select(m => m.Groups[1].Value)
+                            .ToList();
+
+
+        if (matches1.Count == 0 || matches2.Count == 0)
         {
-            rx = new Regex("(?<=a href=\"/)(.*?)(?=\")", RegexOptions.IgnoreCase);
-            MatchCollection match = rx.Matches(matches[ctr].Value);
-            channels[ctr].url = sURL + match[0].Value;
-            channels[ctr].name = matches2[ctr].Value;
+            MessageBox.Show("ERRORE NELL'ESTRAZIONE DELLA PROGRAMMAZIONE");
+            return;
+        }
+        channels = new channel[matches1.Count];
+        for (int ctr = 0; ctr < matches1.Count; ctr++)
+        {
+            channels[ctr].url = matches1[ctr];
+            channels[ctr].name = matches2[ctr];
         }
     }
 
@@ -294,18 +313,34 @@ public partial class MainWindow : Window
             if (siteContent.Equals("")) {
                 return;
             }
-            int startIndex = siteContent.IndexOf("<section id=\"faqs\">");
-            if (startIndex < 0)
-                continue;
-            siteContent = siteContent.Substring(startIndex);
-            int endIndex = siteContent.IndexOf("</li></ul>");
-            siteContent = siteContent.Substring(0, endIndex + 5);
-            Regex rx = new Regex("(?<=<li>)(.*?)(?=</li>)", RegexOptions.IgnoreCase);
-            MatchCollection matches = rx.Matches(siteContent);
-            string lastTimeString = matches[matches.Count - 1].Value.Substring(0, 5);
+
+            Regex regex = new Regex(@"<a class=""program""(.*?)<div class=""program-image-wrapper"">", RegexOptions.Singleline);
+
+            var contentList = regex.Matches(siteContent)
+                                .Cast<Match>()
+                                .Select(m => m.Groups[1].Value)
+                                .ToList();
+
+            if (contentList.Count == 0) continue;
+
+            Regex rxTitle = new Regex(@"title=""([^""]*)""");
+            Regex rxTime = new Regex(@"<div class=""hour"">([^<]*)</div>");
+
+            Program[] channelPrograms = contentList.Select(content => 
+            {
+                Match matchTitle = rxTitle.Match(content);
+                Match matchTime = rxTime.Match(content);
+
+                string title = matchTitle.Success ? matchTitle.Groups[1].Value : "";
+                string time = matchTime.Success ? matchTime.Groups[1].Value : "";
+
+                return new Program(title: title, time: time);
+            }).ToArray();
+
+            string lastTimeString = channelPrograms[^1].time;
             DateTime lastTime = DateTime.ParseExact(lastTimeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
             DateTime firstTime = DateTime.ParseExact("06:00:00", "HH:mm:ss", CultureInfo.InvariantCulture);
-            int elementsCount = matches.Count;
+            int elementsCount = channelPrograms.Length;
             if (firstTime.Equals(lastTime))
                 elementsCount -= 1;
 
@@ -313,7 +348,7 @@ public partial class MainWindow : Window
             {
                 for (int k = 0; k < programs.Length; k++)
                 {
-                    if (matches[ctr].Value.IndexOf(programs[k], StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (channelPrograms[ctr].title.IndexOf(programs[k], StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         TextBlock found = new TextBlock();
                         found.Text = programs[k];
@@ -327,13 +362,13 @@ public partial class MainWindow : Window
                         found.Margin = margin;
                         container.Children.Add(found);
                         TextBlock found2 = new TextBlock();
-                        string timeString = matches[ctr].Value.Substring(0, 5);
+                        string timeString = channelPrograms[ctr].time;
                         DateTime time = DateTime.ParseExact(timeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
                         if (time.CompareTo(DateTime.ParseExact("00:00:00", "HH:mm:ss", CultureInfo.InvariantCulture)) >= 0
                             && time.CompareTo(DateTime.ParseExact("06:00:00", "HH:mm:ss", CultureInfo.InvariantCulture)) < 0)
-                            found2.Text = DateTime.ParseExact(dayString, "dd-MM-yyyy", CultureInfo.InvariantCulture).AddDays(1).ToString("dd-MM-yyyy") + " " + channels[j].name + " " + matches[ctr].Value;
+                            found2.Text = DateTime.ParseExact(dayString, "dd-MM-yyyy", CultureInfo.InvariantCulture).AddDays(1).ToString("dd-MM-yyyy") + " " + channels[j].name + " " + channelPrograms[ctr].time + " | " + channelPrograms[ctr].title;
                         else
-                            found2.Text = dayString + " " + channels[j].name + " " + matches[ctr].Value;
+                            found2.Text = dayString + " " + channels[j].name + " " + channelPrograms[ctr].time + " | " + channelPrograms[ctr].title;
                         found2.Height = 30;
                         found2.FontSize = 20;
                         found2.HorizontalAlignment = HorizontalAlignment.Left;
