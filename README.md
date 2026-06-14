@@ -15,11 +15,11 @@ Il programma permette di cercare film, programmi e serie nel palinsesto dei prin
 
 I titoli aggiunti dall'interfaccia rimangono memorizzati anche per gli avvii successivi, fino a quando non vengono rimossi tramite l'apposito tasto.
 
-![image](https://github.com/Messina-Agata/Televideo/assets/79848054/b18057c5-6af2-462b-8241-b7921c64b99a)
+<img width="973" height="546" alt="image" src="https://github.com/user-attachments/assets/6bffc20f-98da-4a65-8282-0da7650d02cd" />
 
 Risultati della ricerca:
 
-![image](https://github.com/Messina-Agata/Televideo/assets/79848054/cd73bfec-561b-4247-baae-23cf3be508c7)
+<img width="973" height="546" alt="image" src="https://github.com/user-attachments/assets/9b53e551-9949-4925-b9f0-bd9c81a16390" />
 
 
 ## Ulteriori informazioni
