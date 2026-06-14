@@ -23,7 +23,7 @@ public partial class MainWindow : Window
         public string url;
     };
     private channel[] channels;
-    public record Program(string title, string time);
+    public record Program(string title, string time, string link);
 
     public MainWindow()
     {
@@ -49,7 +49,7 @@ public partial class MainWindow : Window
         string siteContent = await GetWebPage(sURL);
         if (string.IsNullOrEmpty(siteContent))
             return;
-        Regex rx = new Regex(@"""Canali Televisivi Principali"", ""itemListElement"": \[\{(.*?)\}\], ""numberOfItems""", RegexOptions.Singleline);
+        Regex rx = new Regex(@"""Canali Televisivi Principali"", .*? ""itemListElement"": \[\{(.*?)\}\]", RegexOptions.Singleline);
         Match match = rx.Match(siteContent);
         string innerContent = match.Success ? match.Groups[1].Value : "";
         Regex rx1 = new Regex(@"""url"": ""([^""]*)""", RegexOptions.IgnoreCase);
@@ -69,7 +69,7 @@ public partial class MainWindow : Window
 
         if (matches1.Count == 0 || matches2.Count == 0)
         {
-            MessageBox.Show("ERRORE NELL'ESTRAZIONE DELLA PROGRAMMAZIONE");
+            MessageBox.Show("ERRORE NELL'ESTRAZIONE DEI CANALI");
             return;
         }
         channels = new channel[matches1.Count];
@@ -290,6 +290,7 @@ public partial class MainWindow : Window
 
     private async Task FindPrograms()
     {
+        string sURL = "https://guidatv.quotidiano.net";
         Console.WriteLine("Start at " + DateTime.Now.ToString("HH:mm:ss"));
         DateTime today = DateTime.Today;
         var tasks = new List<Task<string>>();
@@ -314,7 +315,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            Regex regex = new Regex(@"<a class=""program""(.*?)<div class=""program-image-wrapper"">", RegexOptions.Singleline);
+            Regex regex = new Regex(@"<div class=""program""(.*?)<div class=""program-image-category"">", RegexOptions.Singleline);
 
             var contentList = regex.Matches(siteContent)
                                 .Cast<Match>()
@@ -325,17 +326,26 @@ public partial class MainWindow : Window
 
             Regex rxTitle = new Regex(@"title=""([^""]*)""");
             Regex rxTime = new Regex(@"<div class=""hour"">([^<]*)</div>");
+            Regex rxLink = new Regex(@"href=""([^""]*)""");
 
             Program[] channelPrograms = contentList.Select(content => 
             {
                 Match matchTitle = rxTitle.Match(content);
                 Match matchTime = rxTime.Match(content);
+                Match matchLink = rxLink.Match(content);
 
                 string title = matchTitle.Success ? matchTitle.Groups[1].Value : "";
                 string time = matchTime.Success ? matchTime.Groups[1].Value : "";
+                string link = matchLink.Success ? matchLink.Groups[1].Value : "";
 
-                return new Program(title: title, time: time);
+                return new Program(title: title, time: time, link: link);
             }).ToArray();
+
+            if (channelPrograms.Length == 0)
+            {
+                MessageBox.Show("ERRORE NELL'ESTRAZIONE DELLA PROGRAMMAZIONE");
+                return;
+            }
 
             string lastTimeString = channelPrograms[^1].time;
             DateTime lastTime = DateTime.ParseExact(lastTimeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
@@ -361,19 +371,39 @@ public partial class MainWindow : Window
                         margin.Top = 10;
                         found.Margin = margin;
                         container.Children.Add(found);
+                        StackPanel rigaProgramma = new StackPanel();
+                        rigaProgramma.Orientation = Orientation.Horizontal;
+                        rigaProgramma.Margin = new Thickness(0, 0, 0, 5);
                         TextBlock found2 = new TextBlock();
                         string timeString = channelPrograms[ctr].time;
                         DateTime time = DateTime.ParseExact(timeString + ":00", "HH:mm:ss", CultureInfo.InvariantCulture);
                         if (time.CompareTo(DateTime.ParseExact("00:00:00", "HH:mm:ss", CultureInfo.InvariantCulture)) >= 0
                             && time.CompareTo(DateTime.ParseExact("06:00:00", "HH:mm:ss", CultureInfo.InvariantCulture)) < 0)
-                            found2.Text = DateTime.ParseExact(dayString, "dd-MM-yyyy", CultureInfo.InvariantCulture).AddDays(1).ToString("dd-MM-yyyy") + " " + channels[j].name + " " + channelPrograms[ctr].time + " | " + channelPrograms[ctr].title;
+                            found2.Text = DateTime.ParseExact(dayString, "dd-MM-yyyy", CultureInfo.InvariantCulture).AddDays(1).ToString("dd-MM-yyyy") + " " + channels[j].name + " " + channelPrograms[ctr].time + " | " + channelPrograms[ctr].title + "   ";
                         else
-                            found2.Text = dayString + " " + channels[j].name + " " + channelPrograms[ctr].time + " | " + channelPrograms[ctr].title;
+                            found2.Text = dayString + " " + channels[j].name + " " + channelPrograms[ctr].time + " | " + channelPrograms[ctr].title + "   ";
                         found2.Height = 30;
                         found2.FontSize = 20;
                         found2.HorizontalAlignment = HorizontalAlignment.Left;
                         found2.VerticalAlignment = VerticalAlignment.Center;
-                        container.Children.Add(found2);
+                        rigaProgramma.Children.Add(found2);
+
+                        TextBlock bloccoLink = new TextBlock();
+                        System.Windows.Documents.Hyperlink hyperlinkDettagli = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Dettagli"));
+                        string linkDettagli = sURL + channelPrograms[ctr].link; 
+                        hyperlinkDettagli.NavigateUri = new Uri(linkDettagli);
+                        hyperlinkDettagli.RequestNavigate += (sender, e) =>
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+                            e.Handled = true;
+                        };
+                        bloccoLink.Inlines.Add(hyperlinkDettagli);
+                        bloccoLink.Height = 30;
+                        bloccoLink.FontSize = 20;
+                        bloccoLink.HorizontalAlignment = HorizontalAlignment.Left;
+                        bloccoLink.VerticalAlignment = VerticalAlignment.Center;
+                        rigaProgramma.Children.Add(bloccoLink);
+                        container.Children.Add(rigaProgramma);
                     }
                 }
             }

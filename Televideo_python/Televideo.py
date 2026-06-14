@@ -3,6 +3,7 @@ import tkinter as tk
 from datetime import date, timedelta, datetime
 from tkinter import Scrollbar
 import re
+import webbrowser
 import aiohttp
 import asyncio
 import inspect
@@ -12,6 +13,7 @@ from dataclasses import dataclass
 class Program:
     title: str
     time: str
+    link: str
 
 
 index = 0
@@ -52,7 +54,7 @@ async def find_channels():
     sURL = "https://guidatv.quotidiano.net/"
     siteContent = await get_web_page(sURL)
 
-    rx = r'"Canali Televisivi Principali", "itemListElement": \[\{(.*?)\}\], "numberOfItems"'
+    rx = r'"Canali Televisivi Principali", .*? "itemListElement": \[\{(.*?)\}\]'
     match = re.search(rx, siteContent, re.DOTALL)
     inner_content = match.group(1) if match else ""
 
@@ -160,6 +162,7 @@ async def fetch_all_pages(channels):
     return await asyncio.gather(*tasks)
 
 def find_programs():
+    sURL = "https://guidatv.quotidiano.net"
     global index, offset, factor, canvas, metadati
     global programs
     metadati.clear()
@@ -174,7 +177,7 @@ def find_programs():
             if(site_content == ""):
                 return
 
-            regex = r'<a class="program"(.*?)<div class="program-image-wrapper">'
+            regex = r'<div class="program"(.*?)<div class="program-image-category">'
             content_list = re.findall(regex, site_content, re.DOTALL)
 
             if not content_list:
@@ -182,16 +185,23 @@ def find_programs():
 
             rx_title = r'title="([^"]*)"'
             rx_time = r'<div class="hour">([^<]*)</div>'
+            rx_link = r'href="([^"]*)"'
 
             channel_programs = []
             for content in content_list:
                 match_title = re.search(rx_title, content)
                 match_time = re.search(rx_time, content)
+                match_link = re.search(rx_link, content)
                 
                 title = match_title.group(1) if match_title else ""
                 time = match_time.group(1) if match_time else ""
+                link = match_link.group(1) if match_link else ""
                 
-                channel_programs.append(Program(title=title, time=time))
+                channel_programs.append(Program(title=title, time=time, link=link))
+
+            if len(channel_programs) == 0:
+                show_error_message("Errore nell'estrazione della programmazione")
+                return
 
             last_time_string = channel_programs[-1].time
             last_time = datetime.strptime(last_time_string + ":00", "%H:%M:%S")
@@ -211,12 +221,19 @@ def find_programs():
                         time_string = channel_programs[ctr].time
                         time = datetime.strptime(time_string + ":00", "%H:%M:%S")
                         if ((time >= datetime.strptime("00:00:00", "%H:%M:%S")) and (time < datetime.strptime("06:00:00", "%H:%M:%S"))):
-                            text2 = (datetime.strptime(day_string, "%d-%m-%Y") + timedelta(days = 1)).strftime("%d-%m-%Y") + " " + channels[j]["name"] + " " + channel_programs[ctr].time + " | " + channel_programs[ctr].title
+                            text2 = (datetime.strptime(day_string, "%d-%m-%Y") + timedelta(days = 1)).strftime("%d-%m-%Y") + " " + channels[j]["name"] + " " + channel_programs[ctr].time + " | " + channel_programs[ctr].title + "   "
                         else:
-                            text2 = day_string + " " + channels[j]["name"] + " " + channel_programs[ctr].time + " | " + channel_programs[ctr].title
-                        found2 = tk.Label(canvas, text = text2, fg = "black", bg = "white", font = ("Helvetica", 20))
-                        canvas.create_window(0 + offset, index * factor + offset, window = found2, anchor = "center")
-                        found2.tag = index
+                            text2 = day_string + " " + channels[j]["name"] + " " + channel_programs[ctr].time + " | " + channel_programs[ctr].title + "   "
+                        
+                        riga_programma = tk.Frame(canvas, bg="white")
+                        found2 = tk.Label(riga_programma, text = text2, fg = "black", bg = "white", font = ("Helvetica", 20))
+                        found2.pack(side=tk.LEFT)
+                        link_url = sURL + channel_programs[ctr].link
+                        blocco_link = tk.Label(riga_programma, text="Dettagli", fg="blue", bg="white", font=("Helvetica", 20, "underline"), cursor="hand2")
+                        blocco_link.pack(side=tk.LEFT, padx=(15, 0))
+                        blocco_link.bind("<Button-1>", lambda event, url=link_url: webbrowser.open_new(url))
+                        canvas.create_window(0 + offset, index * factor + offset, window = riga_programma, anchor = "center")
+                        riga_programma.tag = index
                         index += 1
     end = tk.Label(canvas, text = "Ricerca completata", fg = "green", bg = "white", font = ("Helvetica", 24))
     canvas.create_window(0 + offset, index * factor + offset, window = end, anchor = "center")
