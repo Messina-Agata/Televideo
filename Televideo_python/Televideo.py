@@ -1,3 +1,4 @@
+import html
 import os
 import tkinter as tk
 from datetime import date, timedelta, datetime
@@ -171,6 +172,7 @@ def find_programs():
     for j, canale_x in enumerate(channels):
         for d in range(7):
             site_content = results[i]
+            site_content = html.unescape(site_content)
             day_string = metadati[i][1]
             j = metadati[i][0]
             i += 1

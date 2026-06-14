@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.IO;
 using System.Windows.Media;
 using System.Globalization;
+using System.Net;
 
 namespace Televideo;
 
@@ -311,6 +312,7 @@ public partial class MainWindow : Window
             string dayString = metadati[i].Item2;
             int j = metadati[i].Item1;
             string siteContent = results[i];
+            siteContent = WebUtility.HtmlDecode(siteContent);
             if (siteContent.Equals("")) {
                 return;
             }
